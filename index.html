@@ -97,6 +97,8 @@
 
   /* Inputs */
   .input-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(145px,1fr)); gap:12px; margin-bottom:16px; }
+  .input-grid input { transition: background 0.3s; }
+  .input-grid input.flash { background: rgba(0, 229, 160, 0.15) !important; }
   .input-group { display:flex; flex-direction:column; gap:5px; }
   .input-label { font-family:var(--font-mono); font-size:10px; color:var(--text-dim); text-transform:uppercase; letter-spacing:.1em; }
   .input-wrap { position:relative; display:flex; align-items:center; }
@@ -124,8 +126,8 @@
   .btn-force-update { background:none; border:none; color:var(--text-dim); text-decoration:underline; cursor:pointer; font-size:11px; font-family:var(--font-mono); margin-left:12px; }
   .error-box {
     display:none; background:var(--red-dim); border:1px solid rgba(255,77,109,.25);
-    border-radius:8px; padding:9px 13px; font-family:var(--font-mono);
-    font-size:11px; color:var(--red); margin-top:12px; white-space:pre-line;
+    border-radius:8px; padding:12px 16px; font-family:var(--font-mono);
+    font-size:12px; color:var(--red); margin-top:12px; white-space:pre-wrap; word-break: break-all; line-height: 1.5;
   }
 
   /* Metrics */
@@ -336,9 +338,9 @@ let chart = null;
 const CACHE_KEY = 'kae_portfolio_cache';
 const HIST_KEY = 'kae_portfolio_history';
 const API_KEY_KEY = 'gemini_api_key';
-const CACHE_MINUTES = 60; // キャッシュ有効期限(分)
+const INPUTS_KEY = 'kae_portfolio_last_inputs'; // 入力値保持用キャッシュキー
+const CACHE_MINUTES = 60;
 
-// 履歴の初期化
 let hist = JSON.parse(localStorage.getItem(HIST_KEY) || '[]');
 
 function setMode(m) {
@@ -358,7 +360,7 @@ function initHistory() {
 function resetApiKey() {
   const newKey = prompt('Google AI StudioのAPIキーを入力してください。\n（※キーはお使いのブラウザ内のみに保存されます）');
   if (newKey) {
-    localStorage.setItem(API_KEY_KEY, newKey);
+    localStorage.setItem(API_KEY_KEY, newKey.trim());
     alert('APIキーを保存しました。');
   }
 }
@@ -369,53 +371,47 @@ async function fetchAuto(force = false) {
   btn.disabled = true;
   errBox.style.display = 'none';
 
-  // APIキーの確認
   let apiKey = localStorage.getItem(API_KEY_KEY);
   if (!apiKey) {
-    apiKey = prompt('自動取得にはGoogle AI StudioのAPIキーが必要です。\nAPIキーを入力してください。\n（※キーはお使いのブラウザ内のみに保存されます）');
+    apiKey = prompt('自動取得にはGoogle AI StudioのAPIキーが必要です。\nAPIキーを入力してください。');
     if (!apiKey) {
       btn.disabled = false;
       return;
     }
-    localStorage.setItem(API_KEY_KEY, apiKey);
+    localStorage.setItem(API_KEY_KEY, apiKey.trim());
   }
 
-  // キャッシュのチェック
   if (!force) {
     const cachedStr = localStorage.getItem(CACHE_KEY);
     if (cachedStr) {
       try {
         const cached = JSON.parse(cachedStr);
-        const ageMs = Date.now() - cached.timestamp;
-        if (ageMs < CACHE_MINUTES * 60 * 1000) {
+        if (Date.now() - cached.timestamp < CACHE_MINUTES * 60 * 1000) {
           applyFetchedData(cached.data, '自動取得 (キャッシュ)');
           btn.disabled = false;
           return;
         }
-      } catch(e) { console.error("Cache parsing error", e); }
+      } catch(e) {}
     }
   }
 
   btn.innerHTML = '<span class="spinner"></span> Geminiが検索・取得中...';
 
-  // Gemini API v1beta (Google Searchグラウンディング機能付き)
-// 【修正後】
-const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey.trim()}`;
+  // v1beta のエンドポイント。末尾の -latest を除去して確実に存在するモデルを指定
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey.trim()}`;
   
   const payload = {
     contents: [{
       parts: [{
         text: `現在のNVDA、AGIX、QQQMの株価（USD）と、USD/JPY（ドル円）の最新為替レートをウェブ検索して取得してください。
-必ず以下のキーを持つJSON形式で回答してください。Markdown記法（\`\`\`json など）やその他のテキストは一切含めず、純粋なJSON文字列のみを出力してください。
-{
-  "NVDA": 数値,
-  "AGIX": 数値,
-  "QQQM": 数値,
-  "USDJPY": 数値
-}`
+必ず以下のキーを持つJSON形式で回答してください。Markdown記法（\`\`\`json などの囲み）や前後の解説テキストは一切含めず、以下の構造のJSONオブジェクトのみを出力してください。
+{"NVDA": 数値, "AGIX": 数値, "QQQM": 数値, "USDJPY": 数値}`
       }]
     }],
-    tools: [{ googleSearch: {} }] // Google検索ツールを有効化
+    generationConfig: {
+      temperature: 0
+    },
+    tools: [{ googleSearch: {} }]
   };
 
   try {
@@ -425,190 +421,16 @@ const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-
       body: JSON.stringify(payload)
     });
 
-    if (!res.ok) {
-      if (res.status === 400 || res.status === 403) {
-        localStorage.removeItem(API_KEY_KEY);
-        throw new Error('APIキーが無効、または権限エラーです。正しいキーを再設定してください。');
-      }
-      throw new Error(`API通信エラー (${res.status})`);
-    }
-
     const data = await res.json();
-    let text = data.candidates[0].content.parts[0].text;
 
-    // JSON部分の抽出 (Geminiがmarkdownを含めた場合に対応)
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error('APIが期待するJSON形式で応答しませんでした。');
-    
-    const got = JSON.parse(jsonMatch[0]);
-
-    if (!got.NVDA || !got.AGIX || !got.QQQM || !got.USDJPY) {
-      throw new Error('一部の銘柄データが取得できませんでした。');
+    // API側からエラー応答があった場合の可視化処理
+    if (!res.ok || data.error) {
+      const errMsg = data.error ? data.error.message : `HTTP ${res.status}`;
+      if (res.status === 400 || res.status === 403) {
+        localStorage.removeItem(API_KEY_KEY); // 間違ったキーをクリア
+        throw new Error(`APIキーのエラーまたは制限です：\n${errMsg}\nキーが正しいか、またはAI Studio側の設定をご確認ください。`);
+      }
+      throw new Error(`APIサーバーからのエラー：\n${errMsg}`);
     }
 
-    // 成功した場合キャッシュに保存
-    localStorage.setItem(CACHE_KEY, JSON.stringify({
-      timestamp: Date.now(),
-      data: got
-    }));
-
-    applyFetchedData(got, 'Gemini自動取得 (最新)');
-
-  } catch(e) {
-    errBox.style.display = 'block';
-    errBox.textContent = '⚠ エラー\n' + e.message;
-  }
-
-  btn.disabled = false;
-  btn.innerHTML = '↺ 最新の株価を取得';
-}
-
-function applyFetchedData(got, srcLabel) {
-  document.getElementById('in-nvda').value = got.NVDA;
-  document.getElementById('in-agix').value = got.AGIX;
-  document.getElementById('in-qqqm').value = got.QQQM;
-  document.getElementById('in-fx').value = got.USDJPY;
-
-  renderPortfolio(got.NVDA, got.AGIX, got.QQQM, got.USDJPY, srcLabel);
-  
-  const tJPY = (got.NVDA*1 + got.AGIX*2 + got.QQQM*1) * got.USDJPY;
-  addHistory(got.NVDA, got.AGIX, got.QQQM, got.USDJPY, tJPY);
-}
-
-function applyManual() {
-  const n = parseFloat(document.getElementById('in-nvda').value);
-  const a = parseFloat(document.getElementById('in-agix').value);
-  const q = parseFloat(document.getElementById('in-qqqm').value);
-  const f = parseFloat(document.getElementById('in-fx').value);
-  if (!n||!a||!q||!f) { alert('すべての値を正しく入力してください'); return; }
-  renderPortfolio(n, a, q, f, '手動入力');
-}
-
-function fmt(n) { return Math.round(n).toLocaleString('ja-JP'); }
-
-function renderPortfolio(nvda, agix, qqqm, fx, src) {
-  const P = {NVDA:nvda, AGIX:agix, QQQM:qqqm};
-  let totalUSD = 0;
-  const rows = HOLDINGS.map(h => {
-    const usd = h.qty * P[h.symbol];
-    totalUSD += usd;
-    return {...h, price:P[h.symbol], usd, jpy:usd*fx};
-  });
-  const totalJPY = totalUSD * fx;
-  const pnl = totalJPY - COST;
-  const pct = (pnl/COST)*100;
-  const pos = pnl >= 0;
-  const now = new Date();
-
-  document.getElementById('stamp').textContent = src + ' — ' + now.toLocaleDateString('ja-JP') + ' ' + now.toLocaleTimeString('ja-JP');
-  document.getElementById('m-total').textContent = '¥' + fmt(totalJPY);
-  document.getElementById('m-usd').textContent   = '$' + totalUSD.toFixed(2);
-  document.getElementById('m-fx').textContent    = fx.toFixed(2) + ' 円';
-  document.getElementById('m-fx-src').textContent = src;
-
-  const pnlEl = document.getElementById('m-pnl');
-  const pctEl = document.getElementById('m-pct');
-  pnlEl.textContent = (pos?'+':'') + fmt(pnl) + ' 円';
-  pnlEl.className   = 'metric-value ' + (pos?'pos':'neg');
-  pctEl.textContent = (pos?'+':'') + pct.toFixed(2) + '%';
-  pctEl.className   = 'metric-sub ' + (pos?'pos':'neg');
-
-  document.getElementById('holdings-rows').innerHTML = rows.map(h => `
-    <div class="holding-row">
-      <div style="display:flex;align-items:center;gap:10px">
-        <span style="width:8px;height:8px;border-radius:50%;background:${h.color};box-shadow:0 0 6px ${h.color}66;flex-shrink:0"></span>
-        <div><div class="ticker-sym">${h.symbol}</div><div class="ticker-name">${h.name}</div></div>
-      </div>
-      <div class="h-price">$${h.price.toFixed(2)}</div>
-      <div class="h-qty">${h.qty} 株</div>
-      <div class="h-val">
-        <div class="h-jpy">¥${fmt(h.jpy)}</div>
-        <div class="h-usd">$${h.usd.toFixed(2)}</div>
-      </div>
-    </div>`).join('');
-
-  document.getElementById('donut-val').textContent = '¥' + fmt(totalJPY);
-  renderDonut(rows, totalJPY);
-
-  document.getElementById('legend').innerHTML = rows.map(r => {
-    const p = ((r.jpy/totalJPY)*100).toFixed(1);
-    return `<div class="legend-item">
-      <div class="legend-top">
-        <span class="legend-sym" style="color:${r.color}">${r.symbol}</span>
-        <span class="legend-pct">${p}%</span>
-      </div>
-      <div class="legend-bar-bg"><div class="legend-bar-fill" style="width:${p}%;background:${r.color}"></div></div>
-      <div class="legend-amt">¥${fmt(r.jpy)}</div>
-    </div>`;
-  }).join('');
-}
-
-function renderDonut(rows, totalJPY) {
-  if (chart) { chart.destroy(); chart = null; }
-  chart = new Chart(document.getElementById('donutChart'), {
-    type:'doughnut',
-    data:{
-      labels: rows.map(r=>r.symbol),
-      datasets:[{data:rows.map(r=>r.jpy), backgroundColor:rows.map(r=>r.color), borderWidth:0, hoverOffset:5}]
-    },
-    options:{responsive:true, maintainAspectRatio:true, cutout:'72%',
-      plugins:{legend:{display:false},tooltip:{enabled:false}},
-      animation:{animateRotate:true,duration:800}}
-  });
-}
-
-function addHistory(nvda, agix, qqqm, fx, totalJPY) {
-  const now = new Date();
-  const pnl = totalJPY - COST;
-  const timeStr = now.toLocaleDateString('ja-JP',{month:'2-digit',day:'2-digit'}) + ' '
-                + now.toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
-  
-  if (hist.length > 0 && hist[0].time.startsWith(timeStr.split(' ')[0]) && hist[0].totalJPY === totalJPY) return; 
-
-  hist.unshift({ time: timeStr, nvda, agix, qqqm, fx, totalJPY, pnl });
-  if (hist.length > 20) hist.pop();
-  localStorage.setItem(HIST_KEY, JSON.stringify(hist));
-  
-  document.getElementById('history-section').style.display = 'block';
-  renderHistoryRows();
-}
-
-function renderHistoryRows() {
-  document.getElementById('history-body').innerHTML = hist.map(h => {
-    const pos = h.pnl >= 0;
-    return `<tr>
-      <td style="color:var(--text-dim);white-space:nowrap">${h.time}</td>
-      <td>$${h.nvda.toFixed(2)}</td><td>$${h.agix.toFixed(2)}</td><td>$${h.qqqm.toFixed(2)}</td>
-      <td>${h.fx.toFixed(2)}</td>
-      <td>¥${fmt(h.totalJPY)}</td>
-      <td class="${pos?'pnl-pos':'pnl-neg'}">${pos?'+':''}${fmt(h.pnl)} 円</td>
-    </tr>`;
-  }).join('');
-}
-
-function clearHistory() {
-  if(confirm('取得履歴をすべて削除しますか？')) {
-    hist = [];
-    localStorage.removeItem(HIST_KEY);
-    document.getElementById('history-body').innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-dim);padding:16px">まだ記録がありません</td></tr>';
-  }
-}
-
-initHistory();
-
-const cachedStr = localStorage.getItem(CACHE_KEY);
-if (cachedStr) {
-  try {
-    const data = JSON.parse(cachedStr).data;
-    renderPortfolio(data.NVDA, data.AGIX, data.QQQM, data.USDJPY, '前回取得データ');
-  } catch(e) {
-    renderPortfolio(226.31, 43.58, 292.35, 158.56, '初期値');
-  }
-} else {
-  renderPortfolio(226.31, 43.58, 292.35, 158.56, '初期値');
-}
-
-document.getElementById('stamp').textContent = '— 自動取得 または 手動入力 を選択 —';
-</script>
-</body>
-</html>
+    if (!data.candidates || !data.candidates[0] || !data.candidates
