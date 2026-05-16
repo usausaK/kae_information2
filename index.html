@@ -399,7 +399,8 @@ async function fetchAuto(force = false) {
   btn.innerHTML = '<span class="spinner"></span> Geminiが検索・取得中...';
 
   // Gemini API v1beta (Google Searchグラウンディング機能付き)
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+// 【修正後】
+const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey.trim()}`;
   
   const payload = {
     contents: [{
