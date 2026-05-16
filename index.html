@@ -398,7 +398,7 @@ async function fetchAuto(force = false) {
   btn.innerHTML = '<span class="spinner"></span> Geminiが検索・取得中...';
 
   // v1beta のエンドポイント。末尾の -latest を除去して確実に存在するモデルを指定
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey.trim()}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey.trim()}`;
   
   const payload = {
     contents: [{
