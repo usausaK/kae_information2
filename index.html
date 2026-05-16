@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>佳英ちゃんのポートフォリオ</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;700;800&family=Noto+Sans+JP:wght@300;400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --surface2: #1a1a26;
+    --border: rgba(255,255,255,0.07);
+    --border-hover: rgba(255,255,255,0.15);
+    --text: #f0f0f8;
+    --text-muted: rgba(240,240,248,0.45);
+    --text-dim: rgba(240,240,248,0.25);
+    --green: #00e5a0;
+    --green-dim: rgba(0,229,160,0.12);
+    --green-border: rgba(0,229,160,0.3);
+    --red: #ff4d6d;
+    --red-dim: rgba(255,77,109,0.12);
+    --font-display: 'Syne', sans-serif;
+    --font-body: 'Noto Sans JP', sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+  }
+
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: 14px;
+    line-height: 1.6;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none; z-index: 0;
+  }
+
+  .app {
+    position: relative; z-index: 1;
+    max-width: 860px; margin: 0 auto;
+    padding: 36px 20px 72px;
+  }
+
+  /* Header */
+  .header { margin-bottom: 36px; animation: fadeUp .5s ease both; }
+  .eyebrow {
+    font-family: var(--font-mono); font-size: 11px; color: var(--green);
+    letter-spacing: .15em; text-transform: uppercase;
+    margin-bottom: 8px; display: flex; align-items: center; gap: 8px;
+  }
+  .eyebrow::before { content:''; display:inline-block; width:20px; height:1px; background:var(--green); }
+  h1 {
+    font-family: var(--font-display);
+    font-size: clamp(28px,5vw,42px); font-weight: 800;
+    line-height: 1.1; letter-spacing: -.02em;
+  }
+  h1 span { color: var(--green); }
+  .header-sub { margin-top:6px; font-family:var(--font-mono); font-size:12px; color:var(--text-dim); }
+
+  /* Toggle */
+  .mode-wrap { display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; animation:fadeUp .5s .08s ease both; flex-wrap: wrap; gap: 12px; }
+  .mode-left { display:flex; align-items:center; gap:12px; }
+  .mode-label { font-family:var(--font-mono); font-size:10px; color:var(--text-dim); text-transform:uppercase; letter-spacing:.1em; }
+  .toggle-wrap { display:flex; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:3px; gap:2px; }
+  .toggle-btn {
+    padding:6px 18px; border:1px solid transparent; border-radius:6px;
+    background:transparent; color:var(--text-muted);
+    font-family:var(--font-body); font-size:13px; cursor:pointer;
+    display:flex; align-items:center; gap:6px; transition:all .18s;
+  }
+  .toggle-btn.active { background:var(--surface2); color:var(--text); border-color:var(--border-hover); }
+  .api-reset-btn { background:none; border:none; color:var(--text-dim); font-size:11px; font-family:var(--font-mono); text-decoration:underline; cursor:pointer; }
+
+  /* Panels */
+  .panel { display:none; }
+  .panel.visible { display:block; animation:fadeUp .25s ease both; }
+
+  /* Card */
+  .card {
+    background:var(--surface); border:1px solid var(--border); border-radius:16px;
+    padding:22px 24px; margin-bottom:20px; animation:fadeUp .5s .12s ease both;
+  }
+  .card-title { font-family:var(--font-mono); font-size:10px; color:var(--text-dim); text-transform:uppercase; letter-spacing:.14em; margin-bottom:16px; }
+
+  /* Inputs */
+  .input-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(145px,1fr)); gap:12px; margin-bottom:16px; }
+  .input-group { display:flex; flex-direction:column; gap:5px; }
+  .input-label { font-family:var(--font-mono); font-size:10px; color:var(--text-dim); text-transform:uppercase; letter-spacing:.1em; }
+  .input-wrap { position:relative; display:flex; align-items:center; }
+  .input-prefix { position:absolute; left:11px; font-family:var(--font-mono); font-size:12px; color:var(--text-muted); pointer-events:none; }
+  input[type="number"] {
+    width:100%; background:var(--surface2); border:1px solid var(--border); border-radius:8px;
+    padding:9px 10px 9px 24px; color:var(--text); font-family:var(--font-mono); font-size:14px;
+    outline:none; transition:border-color .2s,box-shadow .2s; -moz-appearance:textfield;
+  }
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button { -webkit-appearance:none; }
+  input[type="number"]:focus { border-color:var(--green); box-shadow:0 0 0 3px var(--green-dim); }
+
+  /* Button */
+  .btn-primary {
+    display:inline-flex; align-items:center; gap:8px;
+    background:var(--green); color:#000; border:none; border-radius:8px;
+    padding:10px 22px; font-family:var(--font-display); font-size:13px; font-weight:700;
+    cursor:pointer; letter-spacing:.02em; transition:background .18s, transform .15s;
+  }
+  .btn-primary:hover { background:#00ffb3; transform:translateY(-1px); }
+  .btn-primary:active { transform:translateY(0); }
+  .btn-primary:disabled { opacity:.45; cursor:not-allowed; transform:none; }
+  .btn-note { font-family:var(--font-mono); font-size:11px; color:var(--text-dim); margin-top:9px; }
+  .btn-force-update { background:none; border:none; color:var(--text-dim); text-decoration:underline; cursor:pointer; font-size:11px; font-family:var(--font-mono); margin-left:12px; }
+  .error-box {
+    display:none; background:var(--red-dim); border:1px solid rgba(255,77,109,.25);
+    border-radius:8px; padding:9px 13px; font-family:var(--font-mono);
+    font-size:11px; color:var(--red); margin-top:12px; white-space:pre-line;
+  }
+
+  /* Metrics */
+  .metrics { display:grid; grid-template-columns:repeat(auto-fit,minmax(145px,1fr)); gap:12px; margin-bottom:20px; animation:fadeUp .5s .16s ease both; }
+  .metric { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:16px 18px; transition:border-color .18s; }
+  .metric:hover { border-color:var(--border-hover); }
+  .metric.hl { border-color:var(--green-border); background:linear-gradient(135deg,var(--surface),rgba(0,229,160,.04)); }
+  .metric-label { font-family:var(--font-mono); font-size:10px; color:var(--text-dim); text-transform:uppercase; letter-spacing:.12em; margin-bottom:7px; }
+  .metric-value { font-family:var(--font-display); font-size:22px; font-weight:800; color:var(--text); line-height:1; letter-spacing:-.02em; margin-bottom:4px; }
+  .metric-value.pos { color:var(--green); }
+  .metric-value.neg { color:var(--red); }
+  .metric-sub { font-family:var(--font-mono); font-size:11px; color:var(--text-muted); }
+  .metric-sub.pos { color:var(--green); }
+  .metric-sub.neg { color:var(--red); }
+
+  /* Holdings */
+  .holdings-card { background:var(--surface); border:1px solid var(--border); border-radius:16px; overflow:hidden; margin-bottom:20px; animation:fadeUp .5s .2s ease both; }
+  .holdings-head { display:grid; grid-template-columns:2fr 1.1fr .75fr 1.2fr; gap:8px; padding:10px 18px; background:var(--surface2); border-bottom:1px solid var(--border); }
+  .col-head { font-family:var(--font-mono); font-size:10px; color:var(--text-dim); text-transform:uppercase; letter-spacing:.1em; }
+  .col-head.r { text-align:right; }
+  .holding-row { display:grid; grid-template-columns:2fr 1.1fr .75fr 1.2fr; gap:8px; padding:14px 18px; border-top:1px solid var(--border); align-items:center; transition:background .15s; }
+  .holding-row:first-child { border-top:none; }
+  .holding-row:hover { background:var(--surface2); }
+  .ticker-sym { font-family:var(--font-display); font-size:15px; font-weight:700; }
+  .ticker-name { font-size:11px; color:var(--text-muted); margin-top:1px; }
+  .h-price,.h-qty { font-family:var(--font-mono); font-size:13px; }
+  .h-qty { color:var(--text-muted); }
+  .h-val { text-align:right; }
+  .h-jpy { font-family:var(--font-mono); font-size:13px; font-weight:500; }
+  .h-usd { font-family:var(--font-mono); font-size:11px; color:var(--text-dim); margin-top:2px; }
+
+  /* Chart */
+  .chart-section {
+    background:var(--surface); border:1px solid var(--border); border-radius:16px;
+    padding:22px 24px; display:flex; align-items:center; gap:32px; flex-wrap:wrap;
+    margin-bottom:24px; animation:fadeUp .5s .24s ease both;
+  }
+  .donut-wrap { position:relative; width:180px; height:180px; flex-shrink:0; }
+  .donut-center { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; pointer-events:none; text-align:center; padding:24px; }
+  .donut-center-lbl { font-family:var(--font-mono); font-size:9px; color:var(--text-dim); text-transform:uppercase; letter-spacing:.12em; margin-bottom:3px; }
+  .donut-center-val { font-family:var(--font-display); font-size:11px; font-weight:800; color:var(--text); word-break:break-all; line-height:1.3; }
+  .legend { display:flex; flex-direction:column; gap:14px; flex:1; min-width:180px; }
+  .legend-top { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:4px; }
+  .legend-sym { font-family:var(--font-display); font-size:13px; font-weight:700; }
+  .legend-pct { font-family:var(--font-mono); font-size:12px; color:var(--text-muted); }
+  .legend-bar-bg { height:3px; background:var(--surface2); border-radius:2px; overflow:hidden; }
+  .legend-bar-fill { height:100%; border-radius:2px; transition:width .8s cubic-bezier(.4,0,.2,1); }
+  .legend-amt { font-family:var(--font-mono); font-size:11px; color:var(--text-dim); margin-top:2px; }
+
+  /* History */
+  .history-section { display:none; animation:fadeUp .4s ease both; }
+  .history-title { font-family:var(--font-mono); font-size:10px; color:var(--text-dim); text-transform:uppercase; letter-spacing:.15em; margin-bottom:10px; display:flex; align-items:center; justify-content: space-between; }
+  .history-clear { background:none; border:none; color:var(--text-dim); font-size:10px; font-family:var(--font-body); cursor:pointer; text-decoration:underline; }
+  .history-scroll { overflow-x:auto; }
+  .history-table { width:100%; border-collapse:collapse; background:var(--surface); border:1px solid var(--border); border-radius:12px; overflow:hidden; font-family:var(--font-mono); font-size:12px; min-width:540px; }
+  .history-table thead tr { background:var(--surface2); border-bottom:1px solid var(--border); }
+  .history-table th { padding:9px 13px; text-align:left; font-size:10px; color:var(--text-dim); text-transform:uppercase; letter-spacing:.1em; font-weight:400; }
+  .history-table th:nth-child(6), .history-table th:last-child { text-align:right; }
+  .history-table td { padding:10px 13px; color:var(--text-muted); border-bottom:1px solid var(--border); }
+  .history-table tr:hover td { background:var(--surface2); }
+  .history-table td:nth-child(6), .history-table td:last-child { text-align:right; }
+  .pnl-pos { color:var(--green); }
+  .pnl-neg { color:var(--red); }
+
+  /* Spinner */
+  .spinner { display:inline-block; width:13px; height:13px; border:2px solid rgba(0,0,0,.2); border-top-color:#000; border-radius:50%; animation:spin .7s linear infinite; vertical-align:-2px; }
+  .footer { margin-top:36px; text-align:center; font-family:var(--font-mono); font-size:11px; color:var(--text-dim); animation:fadeUp .5s .3s ease both; }
+
+  @keyframes fadeUp { from{opacity:0;transform:translateY(14px)} to{opacity:1;transform:translateY(0)} }
+  @keyframes spin { to{transform:rotate(360deg)} }
+
+  @media(max-width:580px) {
+    .holdings-head,.holding-row { grid-template-columns:1.8fr 1fr .6fr 1.1fr; }
+    .chart-section { flex-direction:column; }
+    .donut-wrap { margin:0 auto; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="header">
+    <div class="eyebrow">portfolio tracker</div>
+    <h1>佳英ちゃんの<span>株</span></h1>
+    <div class="header-sub" id="stamp">— モードを選んでスタート —</div>
+  </div>
+
+  <div class="mode-wrap">
+    <div class="mode-left">
+      <span class="mode-label">モード</span>
+      <div class="toggle-wrap">
+        <button class="toggle-btn active" id="btn-auto" onclick="setMode('auto')">⟳ 自動取得</button>
+        <button class="toggle-btn" id="btn-manual" onclick="setMode('manual')">✎ 手動入力</button>
+      </div>
+    </div>
+    <button class="api-reset-btn" onclick="resetApiKey()">🔑 APIキーを再設定</button>
+  </div>
+
+  <div class="panel visible" id="panel-auto">
+    <div class="card">
+      <div class="card-title">Google Geminiによる株価・為替の自動取得</div>
+      <button class="btn-primary" id="auto-btn" onclick="fetchAuto()">↺ 最新の株価を取得</button>
+      <button class="btn-force-update" onclick="fetchAuto(true)">強制的に再取得</button>
+      <p class="btn-note">API節約のため1回の通信でまとめて取得し、60分間はキャッシュを利用します</p>
+      <div class="error-box" id="auto-error"></div>
+    </div>
+  </div>
+
+  <div class="panel" id="panel-manual">
+    <div class="card">
+      <div class="card-title">株価・為替レートを手入力（USD）</div>
+      <div class="input-grid">
+        <div class="input-group">
+          <label class="input-label" for="in-nvda">NVDA</label>
+          <div class="input-wrap"><span class="input-prefix">$</span><input id="in-nvda" type="number" step="0.01" value="226.31"></div>
+        </div>
+        <div class="input-group">
+          <label class="input-label" for="in-agix">AGIX</label>
+          <div class="input-wrap"><span class="input-prefix">$</span><input id="in-agix" type="number" step="0.01" value="43.58"></div>
+        </div>
+        <div class="input-group">
+          <label class="input-label" for="in-qqqm">QQQM</label>
+          <div class="input-wrap"><span class="input-prefix">$</span><input id="in-qqqm" type="number" step="0.01" value="292.35"></div>
+        </div>
+        <div class="input-group">
+          <label class="input-label" for="in-fx">USD/JPY</label>
+          <div class="input-wrap"><span class="input-prefix">¥</span><input id="in-fx" type="number" step="0.01" value="158.56"></div>
+        </div>
+      </div>
+      <button class="btn-primary" onclick="applyManual()">✓ 更新して計算</button>
+    </div>
+  </div>
+
+  <div class="metrics">
+    <div class="metric hl">
+      <div class="metric-label">合計評価額</div>
+      <div class="metric-value" id="m-total">—</div>
+      <div class="metric-sub" id="m-usd">— USD</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">取得金額</div>
+      <div class="metric-value">¥90,000</div>
+      <div class="metric-sub">お年玉で購入</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">損益</div>
+      <div class="metric-value" id="m-pnl">—</div>
+      <div class="metric-sub" id="m-pct">—</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">USD / JPY</div>
+      <div class="metric-value" id="m-fx">—</div>
+      <div class="metric-sub" id="m-fx-src">—</div>
+    </div>
+  </div>
+
+  <div class="holdings-card">
+    <div class="holdings-head">
+      <span class="col-head">銘柄</span>
+      <span class="col-head">株価 (USD)</span>
+      <span class="col-head">保有数</span>
+      <span class="col-head r">評価額（円）</span>
+    </div>
+    <div id="holdings-rows"></div>
+  </div>
+
+  <div class="chart-section">
+    <div class="donut-wrap">
+      <canvas id="donutChart"></canvas>
+      <div class="donut-center">
+        <div class="donut-center-lbl">合計</div>
+        <div class="donut-center-val" id="donut-val">—</div>
+      </div>
+    </div>
+    <div class="legend" id="legend"></div>
+  </div>
+
+  <div class="history-section" id="history-section">
+    <div class="history-title">
+      <span>取得履歴</span>
+      <button class="history-clear" onclick="clearHistory()">履歴をクリア</button>
+    </div>
+    <div class="history-scroll">
+      <table class="history-table">
+        <thead>
+          <tr><th>日時</th><th>NVDA</th><th>AGIX</th><th>QQQM</th><th>USD/JPY</th><th>合計評価額</th><th>損益</th></tr>
+        </thead>
+        <tbody id="history-body">
+          <tr><td colspan="7" style="text-align:center;color:var(--text-dim);padding:16px">まだ記録がありません</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="footer">NVDA × 1　AGIX × 2　QQQM × 1　取得金額 ¥90,000</div>
+</div>
+
+<script>
+const HOLDINGS = [
+  { symbol:'NVDA', name:'エヌビディア',              qty:1, color:'#00e5a0', id:'in-nvda' },
+  { symbol:'AGIX', name:'KraneShares AI & Tech ETF', qty:2, color:'#a78bfa', id:'in-agix' },
+  { symbol:'QQQM', name:'Invesco NASDAQ 100 ETF',    qty:1, color:'#60a5fa', id:'in-qqqm' },
+];
+const COST = 90000;
+let chart = null;
+
+// LocalStorageキー
+const CACHE_KEY = 'kae_portfolio_cache';
+const HIST_KEY = 'kae_portfolio_history';
+const API_KEY_KEY = 'gemini_api_key';
+const CACHE_MINUTES = 60; // キャッシュ有効期限(分)
+
+// 履歴の初期化
+let hist = JSON.parse(localStorage.getItem(HIST_KEY) || '[]');
+
+function setMode(m) {
+  ['auto','manual'].forEach(k => {
+    document.getElementById('panel-'+k).classList.toggle('visible', k===m);
+    document.getElementById('btn-'+k).classList.toggle('active', k===m);
+  });
+}
+
+function initHistory() {
+  if (hist.length > 0) {
+    document.getElementById('history-section').style.display = 'block';
+    renderHistoryRows();
+  }
+}
+
+function resetApiKey() {
+  const newKey = prompt('Google AI StudioのAPIキーを入力してください。\n（※キーはお使いのブラウザ内のみに保存されます）');
+  if (newKey) {
+    localStorage.setItem(API_KEY_KEY, newKey);
+    alert('APIキーを保存しました。');
+  }
+}
+
+async function fetchAuto(force = false) {
+  const btn = document.getElementById('auto-btn');
+  const errBox = document.getElementById('auto-error');
+  btn.disabled = true;
+  errBox.style.display = 'none';
+
+  // APIキーの確認
+  let apiKey = localStorage.getItem(API_KEY_KEY);
+  if (!apiKey) {
+    apiKey = prompt('自動取得にはGoogle AI StudioのAPIキーが必要です。\nAPIキーを入力してください。\n（※キーはお使いのブラウザ内のみに保存されます）');
+    if (!apiKey) {
+      btn.disabled = false;
+      return;
+    }
+    localStorage.setItem(API_KEY_KEY, apiKey);
+  }
+
+  // キャッシュのチェック
+  if (!force) {
+    const cachedStr = localStorage.getItem(CACHE_KEY);
+    if (cachedStr) {
+      try {
+        const cached = JSON.parse(cachedStr);
+        const ageMs = Date.now() - cached.timestamp;
+        if (ageMs < CACHE_MINUTES * 60 * 1000) {
+          applyFetchedData(cached.data, '自動取得 (キャッシュ)');
+          btn.disabled = false;
+          return;
+        }
+      } catch(e) { console.error("Cache parsing error", e); }
+    }
+  }
+
+  btn.innerHTML = '<span class="spinner"></span> Geminiが検索・取得中...';
+
+  // Gemini API v1beta (Google Searchグラウンディング機能付き)
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+  
+  const payload = {
+    contents: [{
+      parts: [{
+        text: `現在のNVDA、AGIX、QQQMの株価（USD）と、USD/JPY（ドル円）の最新為替レートをウェブ検索して取得してください。
+必ず以下のキーを持つJSON形式で回答してください。Markdown記法（\`\`\`json など）やその他のテキストは一切含めず、純粋なJSON文字列のみを出力してください。
+{
+  "NVDA": 数値,
+  "AGIX": 数値,
+  "QQQM": 数値,
+  "USDJPY": 数値
+}`
+      }]
+    }],
+    tools: [{ googleSearch: {} }] // Google検索ツールを有効化
+  };
+
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) {
+      if (res.status === 400 || res.status === 403) {
+        localStorage.removeItem(API_KEY_KEY);
+        throw new Error('APIキーが無効、または権限エラーです。正しいキーを再設定してください。');
+      }
+      throw new Error(`API通信エラー (${res.status})`);
+    }
+
+    const data = await res.json();
+    let text = data.candidates[0].content.parts[0].text;
+
+    // JSON部分の抽出 (Geminiがmarkdownを含めた場合に対応)
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('APIが期待するJSON形式で応答しませんでした。');
+    
+    const got = JSON.parse(jsonMatch[0]);
+
+    if (!got.NVDA || !got.AGIX || !got.QQQM || !got.USDJPY) {
+      throw new Error('一部の銘柄データが取得できませんでした。');
+    }
+
+    // 成功した場合キャッシュに保存
+    localStorage.setItem(CACHE_KEY, JSON.stringify({
+      timestamp: Date.now(),
+      data: got
+    }));
+
+    applyFetchedData(got, 'Gemini自動取得 (最新)');
+
+  } catch(e) {
+    errBox.style.display = 'block';
+    errBox.textContent = '⚠ エラー\n' + e.message;
+  }
+
+  btn.disabled = false;
+  btn.innerHTML = '↺ 最新の株価を取得';
+}
+
+function applyFetchedData(got, srcLabel) {
+  document.getElementById('in-nvda').value = got.NVDA;
+  document.getElementById('in-agix').value = got.AGIX;
+  document.getElementById('in-qqqm').value = got.QQQM;
+  document.getElementById('in-fx').value = got.USDJPY;
+
+  renderPortfolio(got.NVDA, got.AGIX, got.QQQM, got.USDJPY, srcLabel);
+  
+  const tJPY = (got.NVDA*1 + got.AGIX*2 + got.QQQM*1) * got.USDJPY;
+  addHistory(got.NVDA, got.AGIX, got.QQQM, got.USDJPY, tJPY);
+}
+
+function applyManual() {
+  const n = parseFloat(document.getElementById('in-nvda').value);
+  const a = parseFloat(document.getElementById('in-agix').value);
+  const q = parseFloat(document.getElementById('in-qqqm').value);
+  const f = parseFloat(document.getElementById('in-fx').value);
+  if (!n||!a||!q||!f) { alert('すべての値を正しく入力してください'); return; }
+  renderPortfolio(n, a, q, f, '手動入力');
+}
+
+function fmt(n) { return Math.round(n).toLocaleString('ja-JP'); }
+
+function renderPortfolio(nvda, agix, qqqm, fx, src) {
+  const P = {NVDA:nvda, AGIX:agix, QQQM:qqqm};
+  let totalUSD = 0;
+  const rows = HOLDINGS.map(h => {
+    const usd = h.qty * P[h.symbol];
+    totalUSD += usd;
+    return {...h, price:P[h.symbol], usd, jpy:usd*fx};
+  });
+  const totalJPY = totalUSD * fx;
+  const pnl = totalJPY - COST;
+  const pct = (pnl/COST)*100;
+  const pos = pnl >= 0;
+  const now = new Date();
+
+  document.getElementById('stamp').textContent = src + ' — ' + now.toLocaleDateString('ja-JP') + ' ' + now.toLocaleTimeString('ja-JP');
+  document.getElementById('m-total').textContent = '¥' + fmt(totalJPY);
+  document.getElementById('m-usd').textContent   = '$' + totalUSD.toFixed(2);
+  document.getElementById('m-fx').textContent    = fx.toFixed(2) + ' 円';
+  document.getElementById('m-fx-src').textContent = src;
+
+  const pnlEl = document.getElementById('m-pnl');
+  const pctEl = document.getElementById('m-pct');
+  pnlEl.textContent = (pos?'+':'') + fmt(pnl) + ' 円';
+  pnlEl.className   = 'metric-value ' + (pos?'pos':'neg');
+  pctEl.textContent = (pos?'+':'') + pct.toFixed(2) + '%';
+  pctEl.className   = 'metric-sub ' + (pos?'pos':'neg');
+
+  document.getElementById('holdings-rows').innerHTML = rows.map(h => `
+    <div class="holding-row">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="width:8px;height:8px;border-radius:50%;background:${h.color};box-shadow:0 0 6px ${h.color}66;flex-shrink:0"></span>
+        <div><div class="ticker-sym">${h.symbol}</div><div class="ticker-name">${h.name}</div></div>
+      </div>
+      <div class="h-price">$${h.price.toFixed(2)}</div>
+      <div class="h-qty">${h.qty} 株</div>
+      <div class="h-val">
+        <div class="h-jpy">¥${fmt(h.jpy)}</div>
+        <div class="h-usd">$${h.usd.toFixed(2)}</div>
+      </div>
+    </div>`).join('');
+
+  document.getElementById('donut-val').textContent = '¥' + fmt(totalJPY);
+  renderDonut(rows, totalJPY);
+
+  document.getElementById('legend').innerHTML = rows.map(r => {
+    const p = ((r.jpy/totalJPY)*100).toFixed(1);
+    return `<div class="legend-item">
+      <div class="legend-top">
+        <span class="legend-sym" style="color:${r.color}">${r.symbol}</span>
+        <span class="legend-pct">${p}%</span>
+      </div>
+      <div class="legend-bar-bg"><div class="legend-bar-fill" style="width:${p}%;background:${r.color}"></div></div>
+      <div class="legend-amt">¥${fmt(r.jpy)}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderDonut(rows, totalJPY) {
+  if (chart) { chart.destroy(); chart = null; }
+  chart = new Chart(document.getElementById('donutChart'), {
+    type:'doughnut',
+    data:{
+      labels: rows.map(r=>r.symbol),
+      datasets:[{data:rows.map(r=>r.jpy), backgroundColor:rows.map(r=>r.color), borderWidth:0, hoverOffset:5}]
+    },
+    options:{responsive:true, maintainAspectRatio:true, cutout:'72%',
+      plugins:{legend:{display:false},tooltip:{enabled:false}},
+      animation:{animateRotate:true,duration:800}}
+  });
+}
+
+function addHistory(nvda, agix, qqqm, fx, totalJPY) {
+  const now = new Date();
+  const pnl = totalJPY - COST;
+  const timeStr = now.toLocaleDateString('ja-JP',{month:'2-digit',day:'2-digit'}) + ' '
+                + now.toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
+  
+  if (hist.length > 0 && hist[0].time.startsWith(timeStr.split(' ')[0]) && hist[0].totalJPY === totalJPY) return; 
+
+  hist.unshift({ time: timeStr, nvda, agix, qqqm, fx, totalJPY, pnl });
+  if (hist.length > 20) hist.pop();
+  localStorage.setItem(HIST_KEY, JSON.stringify(hist));
+  
+  document.getElementById('history-section').style.display = 'block';
+  renderHistoryRows();
+}
+
+function renderHistoryRows() {
+  document.getElementById('history-body').innerHTML = hist.map(h => {
+    const pos = h.pnl >= 0;
+    return `<tr>
+      <td style="color:var(--text-dim);white-space:nowrap">${h.time}</td>
+      <td>$${h.nvda.toFixed(2)}</td><td>$${h.agix.toFixed(2)}</td><td>$${h.qqqm.toFixed(2)}</td>
+      <td>${h.fx.toFixed(2)}</td>
+      <td>¥${fmt(h.totalJPY)}</td>
+      <td class="${pos?'pnl-pos':'pnl-neg'}">${pos?'+':''}${fmt(h.pnl)} 円</td>
+    </tr>`;
+  }).join('');
+}
+
+function clearHistory() {
+  if(confirm('取得履歴をすべて削除しますか？')) {
+    hist = [];
+    localStorage.removeItem(HIST_KEY);
+    document.getElementById('history-body').innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-dim);padding:16px">まだ記録がありません</td></tr>';
+  }
+}
+
+initHistory();
+
+const cachedStr = localStorage.getItem(CACHE_KEY);
+if (cachedStr) {
+  try {
+    const data = JSON.parse(cachedStr).data;
+    renderPortfolio(data.NVDA, data.AGIX, data.QQQM, data.USDJPY, '前回取得データ');
+  } catch(e) {
+    renderPortfolio(226.31, 43.58, 292.35, 158.56, '初期値');
+  }
+} else {
+  renderPortfolio(226.31, 43.58, 292.35, 158.56, '初期値');
+}
+
+document.getElementById('stamp').textContent = '— 自動取得 または 手動入力 を選択 —';
+</script>
+</body>
+</html>
