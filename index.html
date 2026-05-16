@@ -433,4 +433,209 @@ async function fetchAuto(force = false) {
       throw new Error(`APIサーバーからのエラー：\n${errMsg}`);
     }
 
-    if (!data.candidates || !data.candidates[0] || !data.candidates
+    if (!data.candidates || !data.candidates[0] || !data.candidates[0].content) {
+      throw new Error('Geminiから有効なデータが返されませんでした。時間を置いて再度お試しください。');
+    }
+
+    let text = data.candidates[0].content.parts[0].text;
+
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error(`AIの応答から数値データを抽出できませんでした。\n【AIの返答】\n${text}`);
+    
+    const got = JSON.parse(jsonMatch[0]);
+
+    if (!got.NVDA || !got.AGIX || !got.QQQM || !got.USDJPY) {
+      throw new Error('一部の銘柄（または為替）の数値が不足しています。');
+    }
+
+    localStorage.setItem(CACHE_KEY, JSON.stringify({
+      timestamp: Date.now(),
+      data: got
+    }));
+
+    applyFetchedData(got, 'Gemini自動取得 (最新)');
+    flashInputs();
+
+  } catch(e) {
+    errBox.style.display = 'block';
+    errBox.textContent = '⚠ エラーが発生しました\n' + e.message;
+  }
+
+  btn.disabled = false;
+  btn.innerHTML = '↺ 最新の株価を取得';
+}
+
+function applyFetchedData(got, srcLabel) {
+  document.getElementById('in-nvda').value = got.NVDA;
+  document.getElementById('in-agix').value = got.AGIX;
+  document.getElementById('in-qqqm').value = got.QQQM;
+  document.getElementById('in-fx').value = got.USDJPY;
+
+  renderPortfolio(got.NVDA, got.AGIX, got.QQQM, got.USDJPY, srcLabel);
+  
+  const tJPY = (got.NVDA*1 + got.AGIX*2 + got.QQQM*1) * got.USDJPY;
+  addHistory(got.NVDA, got.AGIX, got.QQQM, got.USDJPY, tJPY);
+}
+
+function applyManual() {
+  const n = parseFloat(document.getElementById('in-nvda').value);
+  const a = parseFloat(document.getElementById('in-agix').value);
+  const q = parseFloat(document.getElementById('in-qqqm').value);
+  const f = parseFloat(document.getElementById('in-fx').value);
+  if (isNaN(n) || isNaN(a) || isNaN(q) || isNaN(f)) { alert('すべての値を正しく入力してください'); return; }
+  renderPortfolio(n, a, q, f, '手動入力');
+  alert('入力された値を保存し、ポートフォリオを更新しました！');
+}
+
+function flashInputs() {
+  const inputs = document.querySelectorAll('.input-grid input');
+  inputs.forEach(i => i.classList.add('flash'));
+  setTimeout(() => inputs.forEach(i => i.classList.remove('flash')), 800);
+}
+
+function fmt(n) { return Math.round(n).toLocaleString('ja-JP'); }
+
+function renderPortfolio(nvda, agix, qqqm, fx, src) {
+  const P = {NVDA:nvda, AGIX:agix, QQQM:qqqm};
+  let totalUSD = 0;
+  const rows = HOLDINGS.map(h => {
+    const usd = h.qty * P[h.symbol];
+    totalUSD += usd;
+    return {...h, price:P[h.symbol], usd, jpy:usd*fx};
+  });
+  const totalJPY = totalUSD * fx;
+  const pnl = totalJPY - COST;
+  const pct = (pnl/COST)*100;
+  const pos = pnl >= 0;
+  const now = new Date();
+
+  // ★【機能追加】画面上の値をいつでも復元できるようにローカルストレージへ保存
+  localStorage.setItem(INPUTS_KEY, JSON.stringify({
+    NVDA: nvda, AGIX: agix, QQQM: qqqm, USDJPY: fx
+  }));
+
+  document.getElementById('stamp').textContent = src + ' — ' + now.toLocaleDateString('ja-JP') + ' ' + now.toLocaleTimeString('ja-JP');
+  document.getElementById('m-total').textContent = '¥' + fmt(totalJPY);
+  document.getElementById('m-usd').textContent   = '$' + totalUSD.toFixed(2);
+  document.getElementById('m-fx').textContent    = fx.toFixed(2) + ' 円';
+  document.getElementById('m-fx-src').textContent = src;
+
+  const pnlEl = document.getElementById('m-pnl');
+  const pctEl = document.getElementById('m-pct');
+  pnlEl.textContent = (pos?'+':'') + fmt(pnl) + ' 円';
+  pnlEl.className   = 'metric-value ' + (pos?'pos':'neg');
+  pctEl.textContent = (pos?'+':'') + pct.toFixed(2) + '%';
+  pctEl.className   = 'metric-sub ' + (pos?'pos':'neg');
+
+  document.getElementById('holdings-rows').innerHTML = rows.map(h => `
+    <div class="holding-row">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="width:8px;height:8px;border-radius:50%;background:${h.color};box-shadow:0 0 6px ${h.color}66;flex-shrink:0"></span>
+        <div><div class="ticker-sym">${h.symbol}</div><div class="ticker-name">${h.name}</div></div>
+      </div>
+      <div class="h-price">$${h.price.toFixed(2)}</div>
+      <div class="h-qty">${h.qty} 株</div>
+      <div class="h-val">
+        <div class="h-jpy">¥${fmt(h.jpy)}</div>
+        <div class="h-usd">$${h.usd.toFixed(2)}</div>
+      </div>
+    </div>`).join('');
+
+  document.getElementById('donut-val').textContent = '¥' + fmt(totalJPY);
+  renderDonut(rows, totalJPY);
+
+  document.getElementById('legend').innerHTML = rows.map(r => {
+    const p = ((r.jpy/totalJPY)*100).toFixed(1);
+    return `<div class="legend-item">
+      <div class="legend-top">
+        <span class="legend-sym" style="color:${r.color}">${r.symbol}</span>
+        <span class="legend-pct">${p}%</span>
+      </div>
+      <div class="legend-bar-bg"><div class="legend-bar-fill" style="width:${p}%;background:${r.color}"></div></div>
+      <div class="legend-amt">¥${fmt(r.jpy)}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderDonut(rows, totalJPY) {
+  if (chart) { chart.destroy(); chart = null; }
+  chart = new Chart(document.getElementById('donutChart'), {
+    type:'doughnut',
+    data:{
+      labels: rows.map(r=>r.symbol),
+      datasets:[{data:rows.map(r=>r.jpy), backgroundColor:rows.map(r=>r.color), borderWidth:0, hoverOffset:5}]
+    },
+    options:{responsive:true, maintainAspectRatio:true, cutout:'72%',
+      plugins:{legend:{display:false},tooltip:{enabled:false}},
+      animation:{animateRotate:true,duration:800}}
+  });
+}
+
+function addHistory(nvda, agix, qqqm, fx, totalJPY) {
+  const now = new Date();
+  const pnl = totalJPY - COST;
+  const timeStr = now.toLocaleDateString('ja-JP',{month:'2-digit',day:'2-digit'}) + ' '
+                + now.toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
+  
+  if (hist.length > 0 && hist[0].time.startsWith(timeStr.split(' ')[0]) && hist[0].totalJPY === totalJPY) return; 
+
+  hist.unshift({ time: timeStr, nvda, agix, qqqm, fx, totalJPY, pnl });
+  if (hist.length > 20) hist.pop();
+  localStorage.setItem(HIST_KEY, JSON.stringify(hist));
+  
+  document.getElementById('history-section').style.display = 'block';
+  renderHistoryRows();
+}
+
+function renderHistoryRows() {
+  document.getElementById('history-body').innerHTML = hist.map(h => {
+    const pos = h.pnl >= 0;
+    return `<tr>
+      <td style="color:var(--text-dim);white-space:nowrap">${h.time}</td>
+      <td>$${h.nvda.toFixed(2)}</td><td>$${h.agix.toFixed(2)}</td><td>$${h.qqqm.toFixed(2)}</td>
+      <td>${h.fx.toFixed(2)}</td>
+      <td>¥${fmt(h.totalJPY)}</td>
+      <td class="${pos?'pnl-pos':'pnl-neg'}">${pos?'+':''}${fmt(h.pnl)} 円</td>
+    </tr>`;
+  }).join('');
+}
+
+function clearHistory() {
+  if(confirm('取得履歴をすべて削除しますか？')) {
+    hist = [];
+    localStorage.removeItem(HIST_KEY);
+    document.getElementById('history-body').innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-dim);padding:16px">まだ記録がありません</td></tr>';
+  }
+}
+
+// 履歴の描画初期化
+initHistory();
+
+// ★【機能追加】起動時にブラウザから前回保存されたデータを読み込んで復元
+const savedInputs = localStorage.getItem(INPUTS_KEY);
+if (savedInputs) {
+  try {
+    const savedData = JSON.parse(savedInputs);
+    document.getElementById('in-nvda').value = savedData.NVDA || 226.31;
+    document.getElementById('in-agix').value = savedData.AGIX || 43.58;
+    document.getElementById('in-qqqm').value = savedData.QQQM || 292.35;
+    document.getElementById('in-fx').value = savedData.USDJPY || 158.56;
+    
+    renderPortfolio(
+      parseFloat(document.getElementById('in-nvda').value),
+      parseFloat(document.getElementById('in-agix').value),
+      parseFloat(document.getElementById('in-qqqm').value),
+      parseFloat(document.getElementById('in-fx').value),
+      '前回保存データ'
+    );
+  } catch(e) {
+    renderPortfolio(226.31, 43.58, 292.35, 158.56, '初期値');
+  }
+} else {
+  renderPortfolio(226.31, 43.58, 292.35, 158.56, '初期値');
+}
+
+document.getElementById('stamp').textContent = '— 自動取得 または 手動入力 を選択 —';
+</script>
+</body>
+</html>
